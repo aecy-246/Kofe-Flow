@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kofe Flow</title>
+<meta name="theme-color" content="#1e1a17">
+<meta name="description" content="A private Pomodoro timer. Runs and stores everything on your device.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+/* ===== Phase 0: theme tokens ===== */
+:root{--bg:#1e1a17;--card:#2a2420;--card2:#352d28;--text:#f3ede6;--muted:#a89b8f;--accent:#d4896b;--ink:#1e1a17;--line:rgba(255,255,255,.08);--track:rgba(255,255,255,.08)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f6efe8;--card:#fffaf5;--card2:#efe4d8;--text:#2a211b;--muted:#7b6a5c;--accent:#c4623f;--ink:#fff;--line:rgba(0,0,0,.08);--track:rgba(0,0,0,.08)}}
+:root[data-theme="light"]{--bg:#f6efe8;--card:#fffaf5;--card2:#efe4d8;--text:#2a211b;--muted:#7b6a5c;--accent:#c4623f;--ink:#fff;--line:rgba(0,0,0,.08);--track:rgba(0,0,0,.08)}
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--text);font-family:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+.wrap{max-width:900px;margin:0 auto;padding:20px 16px 40px}
+nav{display:flex;gap:4px;width:max-content;margin:0 auto 28px;padding:5px;border:1px solid var(--line);border-radius:999px}
+nav button{font:inherit;font-weight:600;font-size:14px;color:var(--muted);background:none;border:0;padding:9px 18px;border-radius:999px;cursor:pointer}
+nav button:disabled{cursor:default;opacity:.55}
+nav button.on{background:var(--card2);color:var(--text)}
+h1{margin:0;font-size:28px}.sub{color:var(--muted);margin:4px 0 18px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:32px;display:grid;grid-template-columns:1fr 240px;gap:24px;align-items:center}
+.time{font-size:clamp(64px,13vw,104px);font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+.modes{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:22px}
+.modes button{font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer}
+.modes button.on{color:var(--text);background:var(--card2)}
+.modes button:disabled{opacity:.5;cursor:not-allowed}
+.label{color:var(--muted);font-weight:600;margin:20px 0 4px}
+.line{font-size:22px;font-weight:700;margin:0 0 18px}
+input.tag{width:100%;font:inherit;color:var(--text);background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:11px 14px;margin-bottom:14px}
+.row{display:flex;gap:10px}
+.btn{font:inherit;font-weight:700;border:0;border-radius:999px;padding:16px;cursor:pointer;flex:1;background:var(--accent);color:var(--ink);font-size:16px}
+.btn.sec{flex:0 0 auto;background:var(--card2);color:var(--text);padding:16px 22px;font-size:14px}
+.btn:focus-visible,.modes button:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+.orb{position:relative;width:100%;max-width:240px;aspect-ratio:1;justify-self:center}
+.orb .ring{position:absolute;inset:0;width:100%;height:100%}
+.orb .vwrap{position:absolute;top:12%;left:12%;width:76%;height:76%;border-radius:50%;overflow:hidden;background:var(--card2);-webkit-mask-image:-webkit-radial-gradient(white,black);isolation:isolate}
+.orb video{display:block;width:100%;height:100%;object-fit:cover;pointer-events:none;-webkit-user-select:none;user-select:none}
+video::-webkit-media-controls{display:none!important;-webkit-appearance:none!important;opacity:0!important;pointer-events:none!important}
+video::-webkit-media-controls-enclosure{display:none!important;-webkit-appearance:none!important;opacity:0!important;pointer-events:none!important}
+video::-webkit-media-controls-panel{display:none!important;-webkit-appearance:none!important;opacity:0!important;pointer-events:none!important}
+video::-webkit-media-controls-overlay-play-button{display:none!important;-webkit-appearance:none!important;opacity:0!important;pointer-events:none!important}
+video::-webkit-media-controls-start-playback-button{display:none!important;-webkit-appearance:none!important;opacity:0!important;pointer-events:none!important}
+video::-webkit-media-controls-play-button{display:none!important;-webkit-appearance:none!important;opacity:0!important;pointer-events:none!important}
+video::-webkit-media-controls-overlay-enclosure{display:none!important;-webkit-appearance:none!important;opacity:0!important;pointer-events:none!important}
+.ring circle{fill:none;stroke-width:10}
+#prog{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .3s linear}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px 18px;min-height:112px}
+.card small{display:block;color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.card b{display:block;font-size:26px;margin:8px 0 4px}.card span{color:var(--muted);font-size:13px}
+.bars{display:flex;gap:10px;align-items:flex-end;height:48px;margin-top:10px}
+.bars div{flex:1;text-align:center;color:var(--muted);font-size:11px;font-weight:600}
+.bars i{display:block;margin:0 auto 4px;width:10px;border-radius:99px;background:var(--text);min-height:4px}
+.bars i.z{background:var(--track)}
+.note{color:var(--muted);font-size:12px;text-align:center;margin-top:22px}
+[hidden]{display:none!important}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.seg{display:flex;gap:4px;padding:5px;border:1px solid var(--line);border-radius:999px;background:var(--card)}
+.seg>button,.menuwrap>button{font:inherit;font-weight:700;font-size:14px;color:var(--muted);background:none;border:0;border-radius:999px;padding:9px 16px;cursor:pointer}
+.seg .on{background:var(--accent);color:var(--ink)}
+.menuwrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 8px);z-index:5;min-width:170px;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.menu button{display:block;width:100%;text-align:left;font:inherit;font-size:14px;font-weight:600;color:var(--text);background:none;border:0;border-radius:10px;padding:10px 12px;cursor:pointer}
+.menu button:hover,.menu button[aria-checked="true"]{background:var(--track)}
+.seg button:focus-visible,.menu button:focus-visible,nav button:focus-visible,.custom input:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+.custom{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:14px;color:var(--muted);font-size:13px;font-weight:600}
+.custom input{font:inherit;color:var(--text);background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin-left:6px;color-scheme:dark light}
+#d-err{color:var(--accent)}
+#v-stats .cards{margin-top:18px}
+.chartcard{background:var(--card);border:1px solid var(--line);border-radius:24px;padding:20px 22px;margin-top:14px}
+.chead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;gap:10px}
+.chead h2{margin:0;font-size:18px}.chead span{color:var(--muted);font-size:13px}
+#chart{overflow:hidden}
+.sp{display:grid;grid-template-columns:minmax(70px,140px) 1fr 64px;gap:12px;align-items:center;margin:10px 0;font-size:14px;font-weight:600}
+.sp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp em{font-style:normal;color:var(--muted);text-align:right}
+.tr{height:10px;background:var(--track);border-radius:99px;overflow:hidden}.tr i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.empty{color:var(--muted);font-size:14px;margin:6px 0}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.warn{background:var(--card2);border:1px solid var(--accent);color:var(--text);border-radius:14px;padding:10px 14px;font-size:13px;margin-bottom:16px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+@media (pointer:coarse){.modes button{padding:11px 16px}.seg>button,.menuwrap>button,nav button{min-height:44px}.menu button{padding:13px 12px}}
+@media (max-width:720px){.panel{grid-template-columns:1fr;padding:22px}.orb{order:-1;max-width:190px}.cards{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav aria-label="Sections">
+    <button class="on" data-view="timer" aria-current="page">Timer</button>
+    <button data-view="stats">Stats</button>
+  </nav>
+  <div id="v-timer">
+  <h1>Kofe Flow</h1>
+  <div class="warn" id="warn" role="alert" hidden>Local storage is unavailable in this browser mode, so sessions won't be saved after you close the tab.</div>
+  <p class="sub" id="status">Ready when you are.</p>
+
+  <section class="panel">
+    <div>
+      <div class="modes" id="modes" role="group" aria-label="Timer mode"></div>
+      <div class="time" id="time" role="timer" aria-live="off">25:00</div>
+      <div class="label" id="mlabel">Focus</div>
+      <p class="line" id="msg"></p>
+      <input class="tag" id="tag" maxlength="40" placeholder="What are you working on? (optional)" aria-label="Activity label">
+      <div class="row">
+        <button class="btn" id="main">Start</button>
+        <button class="btn sec" id="reset">Reset</button>
+        <button class="btn sec" id="skip">Skip</button>
+      </div>
+    </div>
+    <div class="orb">
+      <div class="vwrap"><video id="orbvid" autoplay muted loop playsinline preload="auto" disablepictureinpicture disableremoteplayback controlslist="nodownload nofullscreen noremoteplayback" x-webkit-airplay="deny" aria-hidden="true" tabindex="-1" poster="assets/poster.jpg"><source src="assets/timer-loop.mp4" type="video/mp4"><source src="assets/timer-loop.webm" type="video/webm"></video></div>
+      <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="90" stroke="var(--track)"/>
+        <circle id="prog" cx="100" cy="100" r="90" transform="rotate(-90 100 100)" stroke-dasharray="565.49" stroke-dashoffset="0"/>
+      </svg>
+    </div>
+  </section>
+
+  <section class="cards" aria-label="Summary">
+    <div class="card"><small>Today</small><b id="c-today">0m</b><span id="c-sess">0 sessions</span></div>
+    <div class="card"><small>Streak</small><b id="c-streak">0</b><span>days</span></div>
+    <div class="card"><small>Last 7 days</small><div class="bars" id="c-week"></div></div>
+    <div class="card"><small>Top activity</small><b id="c-top">None</b><span>today</span></div>
+  </section>
+  </div>
+  <div id="v-stats" hidden>
+    <div class="hd">
+      <div><h1>Focus Analytics</h1><p class="sub" id="s-sub">Local patterns and session rhythm.</p></div>
+      <div class="seg" role="group" aria-label="Date range">
+        <button data-r="today">Today</button>
+        <button data-r="7d">7D</button>
+        <div class="menuwrap">
+          <button id="rbtn" aria-haspopup="true" aria-expanded="false"><span id="rlab">Range</span> &#9662;</button>
+          <div class="menu" id="rmenu" role="menu" hidden>
+            <button role="menuitemradio" data-r="30d">30 days</button>
+            <button role="menuitemradio" data-r="180d">180 days</button>
+            <button role="menuitemradio" data-r="360d">360 days</button>
+            <button role="menuitemradio" data-r="custom">Custom&hellip;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="custom" id="custom" hidden>
+      <label>From <input type="date" id="d-from"></label>
+      <label>To <input type="date" id="d-to"></label>
+      <span id="d-err" role="alert"></span>
+    </div>
+    <section class="cards" aria-label="Range summary">
+      <div class="card"><small>Focus time</small><b id="s-focus">0m</b><span id="s-focus-sub"></span></div>
+      <div class="card"><small>Sessions</small><b id="s-sess">0</b><span>focus blocks</span></div>
+      <div class="card"><small>Streak</small><b id="s-streak">0</b><span>days</span></div>
+      <div class="card"><small>Top activity</small><b id="s-top">None</b><span id="s-top-sub"></span></div>
+    </section>
+    <section class="chartcard"><div class="chead"><h2>Focused Time</h2><span id="s-total"></span></div><div id="chart"></div></section>
+    <section class="chartcard"><div class="chead"><h2>Activity breakdown</h2><span>by your own labels</span></div><div id="split"></div></section>
+  </div>
+  <div class="sr" id="live" role="status" aria-live="polite"></div>
+  <p class="note">Everything stays on this device. No account, no network. Press Space to start or pause.</p>
+</div>
+
+<script>
+/* ===== Phase 1: timer engine (timestamp-based, survives background throttling) ===== */
+const MODES={focus:{label:'Focus',k:'focusMin'},short:{label:'Short break',k:'shortMin'},long:{label:'Long break',k:'longMin'}};
+const LINES={focus:['Desk set. Headphones on.','One thing. Full attention.','Quiet mind, steady hands.'],short:['Stretch. Sip water. Look far away.'],long:['Step away. You earned this.']};
+const DEF={focusMin:25,shortMin:5,longMin:15,longEvery:4,autoStart:false,sound:true,notify:true};
+const MIN_LOG_SEC=60;
+const $=s=>document.querySelector(s);
+const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+
+const cfg={...DEF,...lsGet('kf_settings',{})};
+const planned=m=>cfg[MODES[m].k]*60;
+let S=lsGet('kf_timer',null)||{mode:'focus',status:'idle',endsAt:0,segStart:0,remaining:planned('focus'),actual:0,startedAt:0,cycle:0,tag:'',segs:[]};
+// segs = the real clock time spent working: [[from,to],...]. Pausing closes a segment, so paused time never drifts to a later day.
+// Migration for timers saved before segs existed:
+if(!Array.isArray(S.segs)){S.segs=[];if(S.status!=='idle'&&S.actual>0){const a=S.status==='paused'?(S.segStart||S.startedAt):S.startedAt;S.segs.push([a,a+S.actual*1000])}}
+const save=()=>lsSet('kf_timer',S);
+const running=()=>S.status==='running';
+const elapsed=()=>Math.min(planned(S.mode),running()?S.actual+(Date.now()-S.segStart)/1000:S.actual);
+
+function start(){
+  statsDirty=true;
+  askNotify();
+  const now=Date.now();
+  if(S.status==='idle'){S.startedAt=now;S.actual=0;S.segs=[];S.remaining=planned(S.mode)}
+  S.segStart=now;S.endsAt=now+S.remaining*1000;S.status='running';save();render();
+}
+function pause(){
+  statsDirty=true;
+  const now=Date.now();
+  S.actual+=(now-S.segStart)/1000;
+  S.segs.push([S.segStart,now]);
+  S.remaining=Math.max(0,Math.ceil((S.endsAt-now)/1000));
+  S.status='paused';save();render();
+}
+function advance(completed){
+  statsDirty=true;
+  if(S.mode==='focus'){
+    if(completed)S.cycle++;
+    S.mode=completed&&S.cycle%cfg.longEvery===0?'long':'short';
+  }else S.mode='focus';
+  Object.assign(S,{status:'idle',remaining:planned(S.mode),actual:0,startedAt:0,endsAt:0,segStart:0,segs:[]});
+}
+function mkRec(type,plan,actual,completed,segs,fallbackEnd){
+  return{startedAt:segs.length?segs[0][0]:(S.startedAt||fallbackEnd-actual*1000),endedAt:segs.length?segs[segs.length-1][1]:fallbackEnd,type,plannedSec:plan,actualSec:actual,completed,tag:S.tag||'',segs};
+}
+async function finish(completed,endTs){
+  const plan=planned(S.mode);
+  const segs=S.segs.concat(running()?[[S.segStart,endTs]]:[]);
+  const actual=completed?plan:Math.round(Math.min(elapsed(),plan));
+  if(completed||actual>=MIN_LOG_SEC){
+    await addSession(mkRec(S.mode,plan,actual,completed,segs,endTs));
+  }
+  const wasFocus=S.mode==='focus';
+  advance(completed);
+  save();
+  if(completed&&cfg.autoStart)start();else render();
+  return wasFocus;
+}
+function resetCurrent(target){
+  // Log partial progress (if any), then return to idle in the same (or a chosen) mode
+  const keep=S.mode,next=typeof target==='string'?target:keep;
+  const done=elapsed(),now=Date.now();
+  const segs=S.segs.concat(running()?[[S.segStart,now]]:[]);
+  const doLog=done>=MIN_LOG_SEC?addSession(mkRec(keep,planned(keep),Math.round(done),false,segs,now)):Promise.resolve();
+  doLog.then(()=>{statsDirty=true;Object.assign(S,{mode:next,status:'idle',remaining:planned(next),actual:0,startedAt:0,endsAt:0,segStart:0,segs:[]});save();render()});
+}
+function skip(){finish(false,Date.now())}
+function setMode(m){ if(S.status==='running')return; resetCurrent(m); }
+
+let lastSec=0,lastWk='';
+function tick(){
+  const now=Date.now();
+  if(running()&&S.endsAt-now<=0){alertDone();finish(true,S.endsAt);return}
+  const k=Math.floor(now/1000);
+  if(k===lastSec)return;
+  if(!running()&&k%30)return;  // idle or paused: nothing changes, refresh only every 30 s (midnight rollover)
+  lastSec=k;render();
+}
+
+/* ===== Phase 2: local persistence (IndexedDB, with in-memory fallback) ===== */
+let db=null,cache=[];
+const openDB=()=>new Promise(res=>{
+  try{
+    const r=indexedDB.open('kofeflow',1);
+    r.onupgradeneeded=()=>{const s=r.result.createObjectStore('sessions',{keyPath:'id',autoIncrement:true});s.createIndex('startedAt','startedAt')};
+    r.onsuccess=()=>res(r.result);
+    r.onerror=()=>res(null);
+  }catch(e){res(null)}
+});
+const allSessions=()=>new Promise(res=>{
+  if(!db)return res([]);
+  try{const q=db.transaction('sessions').objectStore('sessions').getAll();q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([])}catch(e){res([])}
+});
+function addSession(rec){
+  return new Promise(res=>{
+    cache.push(rec);statsDirty=true;
+    if(!db)return res();
+    try{
+      const tx=db.transaction('sessions','readwrite');
+      tx.objectStore('sessions').add(rec);
+      tx.oncomplete=()=>res();tx.onerror=()=>res();
+    }catch(e){res()}
+  });
+}
+
+/* ===== Phase 3: UI, alerts, summary cards ===== */
+const R=2*Math.PI*90;
+const fmtT=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+const fmtM=m=>m<60?m+'m':Math.floor(m/60)+'h '+(m%60)+'m';
+const dayKey=ts=>{const d=new Date(ts);return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate()};
+const sod=ts=>{const d=new Date(ts);d.setHours(0,0,0,0);return d.getTime()};
+
+function summary(){
+  const now=Date.now(),t0=sod(now),bk=[];
+  for(let i=6;i>=0;i--){const st=addDays(t0,-i);bk.push({s:st,e:addDays(st,1)})}
+  const wk=aggregate(bk[0].s,bk[6].e,bk),td=aggregate(t0,bk[6].e,[bk[6]]);
+  const doneDays=new Set();
+  for(const x of cache)if(x.type==='focus'&&x.completed)doneDays.add(dayKey(x.endedAt));
+  let streak=0,d=t0;
+  if(!doneDays.has(dayKey(d)))d=addDays(d,-1);
+  while(doneDays.has(dayKey(d))){streak++;d=addDays(d,-1)}
+  const week=wk.sec.map((x,i)=>({l:'SMTWTFS'[new Date(bk[i].s).getDay()],m:Math.floor(x/60)}));
+  const top=Object.entries(td.tags).filter(e=>e[0]).sort((x,y)=>y[1]-x[1])[0];
+  return {todayMin:Math.floor(td.total/60),sessToday:td.sessions,live:running()&&S.mode==='focus',streak,week,top:top?top[0]:'None'};
+}
+let lastMsgMode='';
+function render(){
+  const rem=running()?Math.max(0,Math.ceil((S.endsAt-Date.now())/1000)):(S.status==='idle'?planned(S.mode):S.remaining);
+  const t=fmtT(rem);
+  $('#time').textContent=t;
+  document.title=(running()?t+' · ':'')+MODES[S.mode].label+' · Kofe Flow';
+  $('#mlabel').textContent=MODES[S.mode].label;
+  if(lastMsgMode!==S.mode){const a=LINES[S.mode];$('#msg').textContent=a[Math.floor(Math.random()*a.length)];lastMsgMode=S.mode}
+  $('#status').textContent=running()?(S.mode==='focus'?'Deep work is running.':'Break time.'):S.status==='paused'?'Paused.':'Ready when you are.';
+  $('#main').textContent=running()?'Pause':S.status==='paused'?'Resume':'Start';
+  $('#prog').style.strokeDashoffset=R*(elapsed()/planned(S.mode));
+  document.querySelectorAll('#modes button').forEach(b=>{b.classList.toggle('on',b.dataset.m===S.mode);b.setAttribute('aria-pressed',b.dataset.m===S.mode);b.disabled=running()&&b.dataset.m!==S.mode});
+  const s=summary();
+  $('#c-today').textContent=fmtM(s.todayMin);
+  $('#c-sess').textContent=s.sessToday+' session'+(s.sessToday===1?'':'s')+(s.live?' + live':'');
+  $('#c-streak').textContent=s.streak;
+  $('#c-top').textContent=s.top;
+  const max=Math.max(1,...s.week.map(w=>w.m));
+  const wk=s.week.map(w=>`<div><i class="${w.m?'':'z'}" style="height:${w.m?Math.max(8,Math.round(w.m/max*30)):4}px"></i>${w.l}</div>`).join('');if(wk!==lastWk){lastWk=wk;$('#c-week').innerHTML=wk}
+  if(view==='stats'){const k=Math.floor(Date.now()/1000);if(statsDirty||(running()&&S.mode==='focus'&&k!==lastStat)){statsDirty=false;lastStat=k;renderStats()}}
+}
+
+/* orb video: starts on open and loops forever; retries if the browser blocks or pauses it */
+let vidGo=()=>{},vidStop=()=>{};
+function startVideo(){
+  const v=$('#orbvid');v.muted=true;v.defaultMuted=true;v.loop=true;
+  const ok=()=>view==='timer'&&!document.hidden;
+  vidGo=()=>{if(ok()&&v.paused){const p=v.play();if(p&&p.catch)p.catch(()=>{})}};
+  vidStop=()=>{if(!v.paused)v.pause()};
+  ['loadeddata','canplay','pause','stalled','suspend'].forEach(e=>v.addEventListener(e,vidGo));
+  v.addEventListener('ended',()=>{v.currentTime=0;vidGo()});
+  ['pointerdown','keydown','touchstart'].forEach(e=>addEventListener(e,vidGo,{passive:true}));
+  document.addEventListener('visibilitychange',()=>document.hidden?vidStop():vidGo());
+  addEventListener('load',vidGo);
+  setInterval(vidGo,3000);
+  vidGo();
+}
+
+/* alerts */
+function alertDone(){
+  $('#live').textContent=S.mode==='focus'?'Focus session complete. Time for a break.':'Break over. Ready for the next focus session.';
+  if(cfg.sound){
+    try{
+      const ctx=new (window.AudioContext||window.webkitAudioContext)();
+      [660,880,1040].forEach((f,i)=>{
+        const o=ctx.createOscillator(),g=ctx.createGain(),t0=ctx.currentTime+i*.22;
+        o.frequency.value=f;o.type='sine';o.connect(g);g.connect(ctx.destination);
+        g.gain.setValueAtTime(.0001,t0);g.gain.exponentialRampToValueAtTime(.25,t0+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+.2);
+        o.start(t0);o.stop(t0+.22);
+      });
+    }catch(e){}
+  }
+  if(cfg.notify&&'Notification' in window&&Notification.permission==='granted'){
+    try{new Notification(S.mode==='focus'?'Focus complete':'Break over',{body:S.mode==='focus'?'Nice work. Time for a break.':'Ready for the next focus block?'})}catch(e){}
+  }
+}
+function askNotify(){try{if(cfg.notify&&'Notification' in window&&Notification.permission==='default')Notification.requestPermission()}catch(e){}}
+
+/* ===== Phase 4: stats (aggregation, range filter, charts) ===== */
+function addDays(ts,n){const d=new Date(ts);return new Date(d.getFullYear(),d.getMonth(),d.getDate()+n).getTime()}
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const RANGES={today:'Today','7d':'7 days','30d':'30 days','180d':'180 days','360d':'360 days',custom:'Custom'};
+const pad=n=>String(n).padStart(2,'0');
+const toInput=ts=>{const d=new Date(ts);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const fromInput=v=>{const p=v.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]).getTime()};
+const fmtD=ts=>{const d=new Date(ts);return d.getDate()+' '+MON[d.getMonth()]};
+const esc=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let view='timer',lastStat=0,statsDirty=false,RG=lsGet('kf_range',{key:'7d'});
+if(!RANGES[RG.key])RG={key:'7d'};
+
+function resolveRange(){
+  const t0=sod(Date.now()),end=addDays(t0,1),k=RG.key;
+  if(k==='today')return{from:t0,to:end};
+  if(k!=='custom'){const n=parseInt(k);return{from:addDays(t0,-(n-1)),to:end}}
+  const dflt={from:addDays(t0,-13),to:end};
+  if(!RG.from||!RG.to)return dflt;
+  const f=fromInput(RG.from),e=fromInput(RG.to);
+  if(f>e)return{...dflt,err:'Start date must be on or before the end date.'};
+  if(f>t0)return{...dflt,err:'Start date is in the future.'};
+  if((e-f)/864e5>1100)return{...dflt,err:'Please pick a range of 3 years or less.'};
+  return{from:f,to:addDays(Math.min(e,t0),1)};
+}
+// Hourly for Today; daily up to 31 days; weekly up to ~200 days; monthly beyond.
+function buildBuckets(from,to,k){
+  const b=[];
+  if(k==='today'){
+    const d=new Date(from),y=d.getFullYear(),m=d.getMonth(),dd=d.getDate();
+    for(let h=0;h<24;h++)b.push({s:new Date(y,m,dd,h).getTime(),e:new Date(y,m,dd,h+1).getTime(),l:pad(h)});
+    return{b,unit:'hour'};
+  }
+  const span=Math.round((to-from)/864e5);
+  const unit=span<=31?'day':span<=200?'week':'month';
+  for(let t=from;t<to;){
+    let e;
+    if(unit==='day')e=addDays(t,1);
+    else if(unit==='week')e=Math.min(addDays(t,7),to);
+    else{const d=new Date(t);e=Math.min(new Date(d.getFullYear(),d.getMonth()+1,1).getTime(),to)}
+    const d=new Date(t);
+    const l=unit==='day'?(span<=7?WD[d.getDay()]:fmtD(t)):unit==='week'?fmtD(t):MON[d.getMonth()]+(d.getMonth()===0||!b.length?" '"+String(d.getFullYear()).slice(2):'');
+    b.push({s:t,e,l});t=e;
+  }
+  return{b,unit};
+}
+// Each focus session is spread over the real time segments it was worked in, so midnight/hour edges are exact and paused time never moves to a later day.
+function aggregate(from,to,bs){
+  const iv=[];
+  for(const s of cache){
+    if(s.type!=='focus')continue;
+    if(Array.isArray(s.segs)&&s.segs.length)s.segs.forEach((g,i)=>iv.push({a:g[0],b:g[1],tag:s.tag||'',done:s.completed&&i===s.segs.length-1,end:s.endedAt}));
+    else iv.push({a:s.endedAt-s.actualSec*1000,b:s.endedAt,tag:s.tag||'',done:s.completed,end:s.endedAt}); // older records
+  }
+  if(S.mode==='focus'&&S.status!=='idle'){const n=Date.now();S.segs.concat(running()?[[S.segStart,n]]:[]).forEach(g=>iv.push({a:g[0],b:g[1],tag:S.tag||'',done:false,end:g[1]}))}
+  const sec=bs.map(()=>0),tags={};let total=0,sessions=0;
+  for(const x of iv){
+    if(x.done&&x.end>=from&&x.end<to)sessions++;
+    const a=Math.max(x.a,from),b=Math.min(x.b,to);
+    if(b<=a)continue;
+    tags[x.tag]=(tags[x.tag]||0)+(b-a)/1000;total+=(b-a)/1000;
+    for(let i=0;i<bs.length;i++){const k=bs[i];if(k.e<=a)continue;if(k.s>=b)break;sec[i]+=(Math.min(b,k.e)-Math.max(a,k.s))/1000}
+  }
+  return{sec,tags,total,sessions};
+}
+const axisL=m=>m===0?'0m':m<60?m+'m':m%60?Math.floor(m/60)+'h '+m%60+'m':m/60+'h';
+function niceStep(mx){if(mx<=0)return 15;for(const s of [5,10,15,30,60,120,180,240,360,480,720,1440])if(s*4>=mx)return s;return Math.ceil(mx/4/1440)*1440}
+function drawChart(bs,sec,unit){
+  const el=$('#chart'),W=Math.max(300,el.clientWidth||800),H=250,L=50,Rr=10,T=12,B=30,pw=W-L-Rr,ph=H-T-B,n=bs.length,slot=pw/n;
+  const step=niceStep(Math.max(0,...sec)/60),ymax=step*4,bw=Math.max(3,Math.min(16,slot*.55));
+  const every=unit==='hour'?(pw>=420?3:6):Math.ceil(n/Math.max(2,Math.floor(pw/64)));
+  let g='';
+  for(let i=0;i<=4;i++){const y=T+ph-ph*i/4;g+=`<line x1="${L}" x2="${W-Rr}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L-8}" y="${y+4}" text-anchor="end" font-size="12" fill="var(--muted)">${axisL(step*i)}</text>`}
+  bs.forEach((k,i)=>{
+    const x=L+slot*i+slot/2,m=sec[i]/60,d=new Date(k.s);
+    if(m>0){const h=Math.max(bw,m/ymax*ph);g+=`<rect x="${x-bw/2}" y="${T+ph-h}" width="${bw}" height="${h}" rx="${bw/2}" fill="var(--text)"/>`}
+    if(i%every===0)g+=`<text x="${x}" y="${H-9}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--muted)">${k.l}</text>`;
+    const tip=unit==='hour'?k.l+':00':unit==='week'?fmtD(k.s)+' – '+fmtD(k.e-1):unit==='month'?MON[d.getMonth()]+' '+d.getFullYear():WD[d.getDay()]+', '+fmtD(k.s);
+    g+=`<rect x="${L+slot*i}" y="${T}" width="${slot}" height="${ph+B}" fill="transparent"><title>${tip}: ${fmtM(Math.round(m))}</title></rect>`;
+  });
+  el.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Focused time chart">${g}</svg>`;
+}
+function renderStats(){
+  const r=resolveRange(),{b,unit}=buildBuckets(r.from,r.to,RG.key),a=aggregate(r.from,r.to,b);
+  const days=Math.max(1,Math.round((r.to-r.from)/864e5)),tot=Math.round(a.total/60),isToday=RG.key==='today';
+  $('#s-sub').textContent=isToday?'Today, '+fmtD(r.from):fmtD(r.from)+' – '+fmtD(r.to-1)+', '+new Date(r.to-1).getFullYear();
+  $('#d-err').textContent=r.err||'';
+  $('#s-focus').textContent=fmtM(tot);
+  $('#s-focus-sub').textContent=isToday?'today':fmtM(Math.round(a.total/60/days))+' avg / day';
+  $('#s-sess').textContent=a.sessions;
+  $('#s-streak').textContent=summary().streak;
+  const tg=Object.entries(a.tags).filter(e=>e[0]).sort((x,y)=>y[1]-x[1]);
+  $('#s-top').textContent=tg.length?tg[0][0]:'None';
+  $('#s-top-sub').textContent=tg.length?fmtM(Math.round(tg[0][1]/60)):'no labels yet';
+  $('#s-total').textContent=fmtM(tot)+(isToday?' today':' in range');
+  drawChart(b,a.sec,unit);
+  const all=Object.entries(a.tags).sort((x,y)=>y[1]-x[1]).slice(0,6);
+  $('#split').innerHTML=all.length?all.map(([t,v])=>`<div class="sp"><span>${esc(t)||'Untagged'}</span><div class="tr"><i style="width:${Math.max(2,v/a.total*100)}%"></i></div><em>${fmtM(Math.round(v/60))}</em></div>`).join(''):'<p class="empty">No focus time in this range yet.</p>';
+}
+function syncRangeUI(){
+  document.querySelectorAll('[data-r]').forEach(b=>{const on=b.dataset.r===RG.key;if(b.closest('#rmenu'))b.setAttribute('aria-checked',on);else b.classList.toggle('on',on)});
+  const inMenu=['30d','180d','360d','custom'].includes(RG.key);
+  $('#rbtn').classList.toggle('on',inMenu);
+  $('#rlab').textContent=inMenu?RANGES[RG.key]:'Range';
+  $('#custom').hidden=RG.key!=='custom';
+  if(RG.key==='custom'){$('#d-from').value=RG.from||'';$('#d-to').value=RG.to||'';$('#d-from').max=$('#d-to').max=toInput(Date.now())}
+}
+function setRange(k){
+  RG.key=k;
+  if(k==='custom'&&(!RG.from||!RG.to)){const t0=sod(Date.now());RG.from=toInput(addDays(t0,-13));RG.to=toInput(t0)}
+  lsSet('kf_range',RG);syncRangeUI();renderStats();
+}
+function switchView(v){
+  view=v;$('#v-timer').hidden=v!=='timer';$('#v-stats').hidden=v!=='stats';
+  document.querySelectorAll('nav [data-view]').forEach(b=>{const on=b.dataset.view===v;b.classList.toggle('on',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+  if(v==='stats'){syncRangeUI();lastStat=0;renderStats()}
+  v==='timer'?vidGo():vidStop();
+}
+
+/* wiring */
+$('#modes').innerHTML=Object.entries(MODES).map(([k,v])=>`<button data-m="${k}">${v.label}</button>`).join('');
+$('#modes').addEventListener('click',e=>{const b=e.target.closest('button');if(b&&b.dataset.m!==S.mode)setMode(b.dataset.m)});
+$('#main').onclick=()=>running()?pause():start();
+$('#reset').onclick=()=>resetCurrent();
+$('#skip').onclick=skip;
+$('#tag').value=S.tag||'';
+$('#tag').addEventListener('input',e=>{S.tag=e.target.value.trim();save()});
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&view==='timer'&&!/INPUT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();running()?pause():start()}
+});
+const menu=$('#rmenu'),rbtn=$('#rbtn');
+const closeMenu=()=>{menu.hidden=true;rbtn.setAttribute('aria-expanded','false')};
+rbtn.onclick=e=>{e.stopPropagation();const open=menu.hidden;menu.hidden=!open;rbtn.setAttribute('aria-expanded',open)};
+document.addEventListener('click',e=>{if(!e.target.closest('.menuwrap'))closeMenu()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
+document.querySelectorAll('[data-r]').forEach(b=>b.addEventListener('click',()=>{setRange(b.dataset.r);closeMenu()}));
+['#d-from','#d-to'].forEach(id=>$(id).addEventListener('change',()=>{RG.from=$('#d-from').value;RG.to=$('#d-to').value;lsSet('kf_range',RG);renderStats()}));
+document.querySelectorAll('nav [data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
+window.addEventListener('resize',()=>{if(view==='stats')renderStats()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});
+
+(async function init(){
+  db=await openDB();
+  $('#warn').hidden=!!db;
+  cache=await allSessions();
+  try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+  // restore: a timer that expired while the tab was closed is logged as completed
+  if(running()&&S.endsAt<=Date.now()){await finish(true,S.endsAt)}
+  render();
+  setInterval(tick,250);
+  startVideo();
+  try{if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{})}catch(e){}
+})();
+</script>
+</body>
+</html>
